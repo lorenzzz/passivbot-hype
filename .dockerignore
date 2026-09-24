@@ -3,6 +3,13 @@ caches/
 historical_data/
 optimize_results/
 
+# Local Python virtual environments
+.venv/
+venv/
+
+# Secrets (never send credentials into the build context)
+api-keys.json
+
 # Ignore Python cache files
 __pycache__/
 *.pyc
