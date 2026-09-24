@@ -53,6 +53,7 @@ from utils import (
     coin_to_symbol,
     load_markets,
     format_approved_ignored_coins,
+    harden_aiohttp_dns,
 )
 from procedures import (
     get_first_timestamps_unified,
@@ -299,11 +300,13 @@ def attempt_gap_fix_ohlcvs(df, symbol=None, verbose=True):
     return new_df.reset_index().rename(columns={"index": "timestamp"})
 
 
-async def fetch_url(session, url, retries=10, backoff=1.0):
+async def fetch_url(session, url, retries=10, backoff=1.0, timeout=120):
     last_exc = None
     for attempt in range(retries):
         try:
-            async with session.get(url) as response:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
                 response.raise_for_status()
                 return await response.read()
         except aiohttp.ClientResponseError as e:
@@ -460,6 +463,12 @@ class OHLCVManager:
         gap_tolerance_ohlcvs_minutes=120.0,
         verbose=True,
     ):
+        # Resolve hosts via getaddrinfo (glibc) instead of aiodns/c-ares for
+        # every aiohttp session this manager creates. c-ares queries a single
+        # nameserver with no /etc/hosts or retry, which stalls on hosts like
+        # public.bybit.com in containerized environments while the browser,
+        # curl and urllib all work. Idempotent.
+        harden_aiohttp_dns()
         self.exchange = normalize_exchange_name(exchange)
         self.quote = get_quote(exchange)
         self.start_date = "2020-01-01" if start_date is None else format_end_date(start_date)

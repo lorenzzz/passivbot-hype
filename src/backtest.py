@@ -29,6 +29,7 @@ from utils import (
     format_approved_ignored_coins,
     date_to_ts,
     get_quote,
+    harden_aiohttp_dns,
 )
 from pure_funcs import (
     ts_to_date,
@@ -804,6 +805,13 @@ def plot_forager(
 
 
 async def main():
+    # Use getaddrinfo (glibc) instead of aiodns/c-ares for every aiohttp
+    # connection in this process: c-ares queries a single nameserver with no
+    # /etc/hosts or retry, which stalls on hosts like public.bybit.com and
+    # api.hyperliquid.xyz in containerized environments (browser/curl work,
+    # aiohttp hangs). Must run before any aiohttp session or ccxt instance is
+    # created. Idempotent.
+    harden_aiohttp_dns()
     manage_rust_compilation()
     parser = argparse.ArgumentParser(prog="backtest", description="run forager backtest")
     parser.add_argument(

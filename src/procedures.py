@@ -350,10 +350,12 @@ async def get_first_timestamps_unified(coins: List[str], exchange: str = None):
 
     # Initialize ccxt clients for each exchange
     ccxt_clients = {}
+    all_ccxt_clients = []
     for ex_name in sorted(exchange_map):
         try:
             ccxt_clients[ex_name] = getattr(ccxta, ex_name)()
             ccxt_clients[ex_name].options["defaultType"] = "swap"
+            all_ccxt_clients.append(ccxt_clients[ex_name])
         except Exception as e:
             print(f"Error loading {ex_name} from ccxt. Skipping. {e}")
             del exchange_map[ex_name]
@@ -488,9 +490,17 @@ async def get_first_timestamps_unified(coins: List[str], exchange: str = None):
         # Otherwise, return earliest cross-exchange timestamps
         return ftss
     finally:
-        await asyncio.gather(
-            *(ccxt_clients[e].close() for e in ccxt_clients if hasattr(ccxt_clients[e], "close"))
-        )
+        # Close every ccxt client we created, even ones that were `del`-ed from
+        # ccxt_clients in failure paths, so no aiohttp session is left dangling
+        # until process exit (which otherwise emits "Unclosed client session"
+        # and "requires to release all resources" warnings).
+        for cc in all_ccxt_clients:
+            try:
+                close = getattr(cc, "close", None)
+                if close is not None:
+                    await close()
+            except Exception:
+                pass
 
 
 def assert_correct_ccxt_version(version=None, ccxt=None):

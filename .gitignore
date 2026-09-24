@@ -16,6 +16,10 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Virtual environments
+.venv/
+venv/
+
 # Build artifacts
 build/
 dist/
