@@ -240,6 +240,8 @@ class HyperliquidBot(Passivbot):
         prev_hash = ""
         while True:
             fetched = await self.fetch_pnl(start_time=start_time, limit=limit)
+            if fetched is False or fetched is None:
+                return False
             if fetched == []:
                 break
             for elm in fetched:

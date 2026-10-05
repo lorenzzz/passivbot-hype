@@ -1702,14 +1702,27 @@ class Passivbot:
                 logging.error(f"error loading {self.pnls_cache_filepath} {e}")
         if pnls_cache:
             newest_pnls = await self.fetch_pnls(start_time=pnls_cache[-1]["timestamp"])
+            if newest_pnls is False or newest_pnls is None:
+                newest_pnls = []
             if pnls_cache[0]["timestamp"] > age_limit + 1000 * 60 * 60 * 4:
                 # might be older missing pnls
                 logging.info(
                     f"fetching missing pnls from before {ts_to_date(pnls_cache[0]['timestamp'])}"
                 )
-                missing_pnls = await self.fetch_pnls(
-                    start_time=age_limit, end_time=pnls_cache[0]["timestamp"]
-                )
+                try:
+                    missing_pnls = await asyncio.wait_for(
+                        self.fetch_pnls(
+                            start_time=age_limit, end_time=pnls_cache[0]["timestamp"]
+                        ),
+                        timeout=60,
+                    )
+                except asyncio.TimeoutError:
+                    logging.error(
+                        "timed out fetching missing pnls; continuing without full backfill"
+                    )
+                    missing_pnls = []
+                if missing_pnls is False or missing_pnls is None:
+                    missing_pnls = []
                 pnls_cache = sorted(
                     {
                         elm["id"]: elm
@@ -1720,12 +1733,15 @@ class Passivbot:
                 )
         else:
             pnls_cache = await self.fetch_pnls(start_time=age_limit)
+            if pnls_cache is False or pnls_cache is None:
+                pnls_cache = []
             if pnls_cache:
                 try:
                     json.dump(pnls_cache, open(self.pnls_cache_filepath, "w"))
                 except Exception as e:
                     logging.error(f"error dumping pnls to {self.pnls_cache_filepath} {e}")
         self.pnls = pnls_cache
+        logging.info(f"init_pnls done: {len(self.pnls)} pnls")
 
     async def update_pnls(self):
         """Fetch latest fills, update the PnL cache, and persist it when changed."""
